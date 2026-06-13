@@ -1,0 +1,14 @@
+# Rust
+/target
+backend/target
+Cargo.lock
+
+# Node
+node_modules
+dist
+.env
+.env.local
+
+# Model files
+model/*.pth
+model/*.onnx
