@@ -9,6 +9,11 @@ dist
 .env
 .env.local
 
+# Python
+.venv/
+__pycache__/
+*.pyc
+
 # Model files
 model/*.pth
 model/*.onnx
