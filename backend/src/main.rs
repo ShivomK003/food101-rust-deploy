@@ -82,8 +82,8 @@ async fn health() -> &'static str {
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    let model_path = "../model/onnx/food101_mobilenetv3.onnx";
-    let classes_path = "../model/classes/food101_classes.txt";
+    let model_path = "model/onnx/food101_mobilenetv3.onnx";
+    let classes_path = "model/classes/food101_classes.txt";
 
     let classifier =
         FoodClassifier::new(model_path, classes_path).expect("Failed to load ONNX model/classes");
@@ -106,7 +106,11 @@ async fn main() {
         .layer(DefaultBodyLimit::max(10 * 1024 * 1024))
         .layer(cors);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
+    let port = std::env::var("PORT").unwrap_or_else(|_| "8080".to_string());
+
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
+        .await
+        .unwrap();
 
     println!("Backend running on http://localhost:8080");
 
