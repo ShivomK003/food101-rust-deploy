@@ -2,7 +2,7 @@ FROM rust:1.88-bookworm AS builder
 
 WORKDIR /app
 
-COPY backend/Cargo.toml backend/Cargo.lock ./backend/
+COPY backend/Cargo.toml ./backend/
 COPY backend/src ./backend/src
 
 WORKDIR /app/backend
