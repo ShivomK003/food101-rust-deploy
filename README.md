@@ -50,6 +50,9 @@ Food101 Predictions
 
 ## Deployment
 
+Backend:
+https://food101-rust-deploy.onrender.com
+
 ## Out-of-Distribution Examples
 
 The model was trained on Food101 and therefore cannot recognize foods outside the dataset.
