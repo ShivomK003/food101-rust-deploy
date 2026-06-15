@@ -50,8 +50,13 @@ Food101 Predictions
 
 ## Deployment
 
-Backend:
+### Backend:
+
 https://food101-rust-deploy.onrender.com
+
+### Frontend:
+
+https://food101-rust-deploy.vercel.app/
 
 ## Out-of-Distribution Examples
 
@@ -85,3 +90,6 @@ npm run dev
 ```
 
 ## Screenshots
+
+![alt text](image.png)
+![alt text](image-1.png)
