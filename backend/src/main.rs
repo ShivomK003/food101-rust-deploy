@@ -13,11 +13,22 @@ use axum::{
 };
 use model::inference::FoodClassifier;
 use serde::Serialize;
-use std::sync::Arc;
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+    time::Instant,
+};
 use tokio::sync::Mutex;
 use tower_http::cors::{Any, CorsLayer};
 
+#[derive(Clone)]
 struct AppState {
+    total_predictions: Arc<AtomicU64>,
+    total_latency_ms: Arc<AtomicU64>,
+    total_errors: Arc<AtomicU64>,
+    model_version: String,
     classifier: Arc<Mutex<FoodClassifier>>,
 }
 
@@ -31,10 +42,30 @@ struct UploadResponse {
     predictions: Vec<Prediction>,
 }
 
+#[derive(Serialize)]
+struct MetricsResponse {
+    total_predictions: f64,
+    avg_latency_ms: f64,
+    total_errors: f64,
+    model_version: String,
+}
+
+#[derive(Serialize)]
+struct ModelInfoResponse {
+    model: String,
+    dataset: String,
+    top1_accuracy: f64,
+    top5_accuracy: f64,
+    format: String,
+    model_version: String,
+}
+
 async fn predict(
     State(state): State<Arc<AppState>>,
     mut multipart: Multipart,
 ) -> Result<Json<UploadResponse>, StatusCode> {
+    let start = Instant::now();
+
     while let Some(field) = multipart
         .next_field()
         .await
@@ -60,6 +91,13 @@ async fn predict(
                 .predict_top5(tensor)
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+            let latency_ms = start.elapsed().as_millis() as u64;
+
+            state.total_predictions.fetch_add(1, Ordering::Relaxed);
+            state
+                .total_latency_ms
+                .fetch_add(latency_ms, Ordering::Relaxed);
+
             return Ok(Json(UploadResponse {
                 filename,
                 content_type,
@@ -72,6 +110,36 @@ async fn predict(
     }
 
     Err(StatusCode::BAD_REQUEST)
+}
+
+async fn metrics_handler(State(state): State<Arc<AppState>>) -> Json<MetricsResponse> {
+    let total_predictions = state.total_predictions.load(Ordering::Relaxed) as f64;
+    let total_latency_ms = state.total_latency_ms.load(Ordering::Relaxed) as f64;
+    let total_errors = state.total_errors.load(Ordering::Relaxed) as f64;
+
+    let avg_latency_ms = if total_predictions > 0.0 {
+        total_latency_ms / total_predictions
+    } else {
+        0.0
+    };
+
+    Json(MetricsResponse {
+        total_predictions,
+        avg_latency_ms,
+        total_errors,
+        model_version: state.model_version.clone(),
+    })
+}
+
+async fn model_info_handler(State(state): State<Arc<AppState>>) -> Json<ModelInfoResponse> {
+    Json(ModelInfoResponse {
+        model: "MobileNetV3 Large".to_string(),
+        dataset: "Food101".to_string(),
+        top1_accuracy: 76.52,
+        top5_accuracy: 93.76,
+        format: "ONNX".to_string(),
+        model_version: state.model_version.clone(),
+    })
 }
 
 async fn health() -> &'static str {
@@ -92,6 +160,10 @@ async fn main() {
 
     let state = Arc::new(AppState {
         classifier: Arc::new(Mutex::new(classifier)),
+        total_predictions: Arc::new(AtomicU64::new(0)),
+        total_latency_ms: Arc::new(AtomicU64::new(0)),
+        total_errors: Arc::new(AtomicU64::new(0)),
+        model_version: "v1.0.0".to_string(),
     });
 
     let cors = CorsLayer::new()
@@ -102,6 +174,8 @@ async fn main() {
     let app = Router::new()
         .route("/health", get(health))
         .route("/predict", post(predict))
+        .route("/metrics", get(metrics_handler))
+        .route("/model-info", get(model_info_handler))
         .with_state(state)
         .layer(DefaultBodyLimit::max(10 * 1024 * 1024))
         .layer(cors);
